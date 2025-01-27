@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Model Marketplace</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { width: 80%; margin: auto; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px 0; }
+        input, select { padding: 10px; margin: 10px 0; width: 100%; }
+        .model-list { display: flex; flex-wrap: wrap; }
+        .model-item { border: 1px solid #ccc; margin: 10px; padding: 10px; width: 30%; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>AI Model Marketplace</h1>
+    <button id="connectButton">Connect to MetaMask</button>
+
+    <h3>List a New AI Model</h3>
+    <form id="listModelForm">
+        <input type="text" id="modelName" placeholder="Model Name" required />
+        <input type="text" id="modelDescription" placeholder="Model Description" required />
+        <input type="number" id="modelPrice" placeholder="Price (in Wei)" required />
+        <button type="submit">List Model</button>
+    </form>
+
+    <hr>
+    <button id="loadModelsButton">Load All Models</button>
+
+    <h3>Available Models</h3>
+    <div class="model-list" id="modelList"></div>
+
+    <hr>
+
+    <h3>Rate a Model</h3>
+    <form id="rateModelForm" onsubmit="rateModel(event)">
+        <input type="number" id="rateModelId" placeholder="Model ID" required />
+        <input type="number" id="rateRating" placeholder="Rating (1-5)" required min="1" max="5" />
+        <button type="submit">Rate Model</button>
+    </form>
+
+    <hr>
+
+    <div>
+        <h3>View Model Details</h3>
+        <form id="getModelDetailsForm">
+            <label for="viewModelId">Model ID:</label>
+            <input type="number" id="viewModelId" required />
+
+            <button type="submit">View Details</button>
+        </form>
+        <div id="modelDetails"></div>
+    </div>
+
+    <div>
+        <h3>Purchase an AI Model</h3>
+        <form id="purchaseModelForm">
+            <label for="purchaseModelId">Model ID:</label>
+            <input type="number" id="purchaseModelId" name="purchaseModelId">
+            <button onclick="purchaseModel()">Purchase</button>
+
+        </form>
+    </div>
+
+    <h3>Withdraw Funds</h3>
+    <button id="withdrawFundsButton">Withdraw Funds</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/web3/dist/web3.min.js"></script>
+<script>
+    const contractABI = [[
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "description",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "price",
+				"type": "uint256"
+			}
+		],
+		"name": "listModel",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "modelId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "creator",
+				"type": "address"
+			}
+		],
+		"name": "ModelListed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "modelId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "buyer",
+				"type": "address"
+			}
+		],
+		"name": "ModelPurchased",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "modelId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint8",
+				"name": "rating",
+				"type": "uint8"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "rater",
+				"type": "address"
+			}
+		],
+		"name": "ModelRated",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "modelId",
+				"type": "uint256"
+			}
+		],
+		"name": "purchaseModel",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "modelId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint8",
+				"name": "rating",
+				"type": "uint8"
+			}
+		],
+		"name": "rateModel",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "modelId",
+				"type": "uint256"
+			}
+		],
+		"name": "getModelDetails",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "hasPurchased",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "modelCount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "models",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "description",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address payable",
+				"name": "creator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "ratingSum",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "ratingCount",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]];
+
+    const contractAddress = '0xDA0bab807633f07f013f94DD0E6A4F96F8742B53';  // Replace with your contract address
+    let web3;
+    let contract;
+    let accounts;
+
+    window.onload = async () => {
+        if (window.ethereum) {
+            web3 = new Web3(window.ethereum);
+            contract = new web3.eth.Contract(contractABI, contractAddress);
+            document.getElementById('connectButton').addEventListener('click', connectWallet);
+        } else {
+            alert("Please install MetaMask!");
+        }
+    };
+    async function getModelDetails() {
+        const modelId = document.getElementById('viewModelId').value;
+
+        if (!modelId) {
+            alert("Please enter a Model ID.");
+            return;
+        }
+
+        try {
+            const modelCount = await contract.methods.modelCount().call();
+            if (modelId > modelCount || modelId < 1) {
+                alert("Model ID does not exist.");
+                return;
+            }
+
+            const modelDetails = await contract.methods.getModelDetails(modelId).call();
+
+            const modelInfo = `
+            <h4>Model Details:</h4>
+            <p>Name: ${modelDetails[0]}</p>
+            <p>Description: ${modelDetails[1]}</p>
+            <p>Price: ${web3.utils.fromWei(modelDetails[2], 'ether')} ETH</p>
+            <p>Creator: ${modelDetails[3]}</p>
+            <p>Rating: ${modelDetails[4]}</p>
+        `;
+            document.getElementById('modelDetails').innerHTML = modelInfo;
+        } catch (error) {
+            console.error("Error fetching model details:", error);
+            alert("An error occurred while fetching model details.");
+        }
+    }
+    document.getElementById('getModelDetailsForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await getModelDetails();
+    });
+    async function loadModels() {
+        try {
+            const modelCount = await contract.methods.modelCount().call();
+            const modelsList = document.getElementById('modelsList');
+            modelsList.innerHTML = '';
+
+            for (let i = 1; i <= modelCount; i++) {
+                const model = await contract.methods.models(i).call();
+                const modelItem = document.createElement('li');
+                modelItem.textContent = `${model.name} - ${web3.utils.fromWei(model.price, 'ether')} ETH`;
+                modelsList.appendChild(modelItem);
+            }
+        } catch (error) {
+            console.error("Error loading models:", error);
+        }
+    }
+
+    async function connectWallet() {
+        try {
+            accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            console.log("Connected:", accounts);
+            document.getElementById('connectButton').innerText = `Connected: ${accounts[0]}`;
+        } catch (error) {
+            alert("Connection failed!");
+        }
+    }
+
+    document.getElementById('listModelForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('modelName').value;
+        const description = document.getElementById('modelDescription').value;
+        const price = web3.utils.toWei(document.getElementById('modelPrice').value, 'ether');
+        try {
+            await contract.methods.listModel(name, description, price).send({ from: accounts[0] });
+            alert("Model listed!");
+            loadModels();
+        } catch (error) {
+            console.error("Error listing model:", error);
+        }
+    });
+
+    async function loadModels() {
+        const modelCount = await contract.methods.modelCount().call();
+        const modelListContainer = document.getElementById('modelList');
+        modelListContainer.innerHTML = '';
+
+        for (let i = 1; i <= modelCount; i++) {
+            const model = await contract.methods.models(i).call();
+            const modelDiv = document.createElement('div');
+            modelDiv.classList.add('model-item');
+            modelDiv.innerHTML = `
+                    <h4>${model.name}</h4>
+                    <p>${model.description}</p>
+                    <p>Price: ${web3.utils.fromWei(model.price, 'ether')} ETH</p>
+                    <button onclick="purchaseModel(${i})">Purchase</button>
+                    <button onclick="viewModelDetails(${i})">View Details</button>
+                `;
+            modelListContainer.appendChild(modelDiv);
+        }
+    }
+    async function rateModel(e) {
+        e.preventDefault();
+        const modelId = document.getElementById('rateModelId').value;
+        const rating = document.getElementById('rateRating').value;
+
+        if (!modelId || !rating) {
+            alert("Please enter both model ID and rating.");
+            return;
+        }
+
+        if (rating < 1 || rating > 5) {
+            alert("Rating must be between 1 and 5.");
+            return;
+        }
+
+        try {
+            await contract.methods.rateModel(modelId, rating).send({ from: accounts[0] });
+            alert("Model rated successfully!");
+            await getModelDetails(); 
+        } catch (error) {
+            console.error("Error rating the model:", error);
+            alert("An error occurred while rating the model.");
+        }
+    }
+
+
+    async function viewModelDetails(modelId) {
+        const modelDetails = await contract.methods.getModelDetails(modelId).call();
+        alert(`
+                Name: ${modelDetails[0]}
+                Description: ${modelDetails[1]}
+                Price: ${web3.utils.fromWei(modelDetails[2], 'ether')} ETH
+                Creator: ${modelDetails[3]}
+                Rating: ${modelDetails[4]}
+            `);
+    }
+
+    async function purchaseModel() {
+        const modelId = document.getElementById('purchaseModelId').value;
+
+        if (!modelId) {
+            alert("Please select a model to purchase.");
+            return;
+        }
+
+        const price = await contract.methods.models(modelId).call().then(model => model.price);
+
+        try {
+            const accounts = await web3.eth.getAccounts();
+            await contract.methods.purchaseModel(modelId).send({
+                from: accounts[0],
+                value: price 
+            });
+
+            alert("Purchase successful!");
+        } catch (error) {
+            console.error("Error purchasing the model:", error);
+            alert("An error occurred while purchasing the model.");
+        }
+    }
+    document.getElementById('withdrawFundsButton').addEventListener('click', async () => {
+        try {
+            await contract.methods.withdrawFunds().send({ from: accounts[0] });
+            alert("Funds withdrawn!");
+        } catch (error) {
+            console.error("Error withdrawing funds:", error);
+        }
+    });
+    document.getElementById('purchaseModelForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await purchaseModel();
+    });
+    document.getElementById('loadModelsButton').addEventListener('click', loadModels);
+
+
+</script>
+</body>
+</html>
